@@ -486,36 +486,106 @@ function AnalyseStatic(dataKIM, dataMotion, file_output, couchshifted)
 % dataMotion.raw [LR, SI, AP] couch shifts
 % dataKIM.coord.shifted [x, y, z] KIM data
 
-f = figure;
+% Create the main figure for data selection
+f = figure('Name', 'Select Analysis Region');
 hold on
-plot(dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,1), 'bx', dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,2), 'gx', dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,3), 'rx')
-ylabel('Position (mm)', 'fontsize',16);
-xlabel('Time (s)', 'fontsize',16);
-title('KIM 3DoF motion', 'fontsize', 16);
-legend('LR (KIM)', 'SI (KIM)', 'AP (KIM)', 'Location', 'best');
-set(gca,'fontsize',16)
+plot(dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,1), 'b-', 'DisplayName', 'LR (KIM)')
+plot(dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,2), 'g-', 'DisplayName', 'SI (KIM)')
+plot(dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,3), 'r-', 'DisplayName', 'AP (KIM)')
+ylabel('Position (mm)', 'fontsize', 16);
+xlabel('Time (s)', 'fontsize', 16);
+title('KIM 3DoF motion - Click to select start and end points', 'fontsize', 16);
+legend('Location', 'best');
+set(gca, 'fontsize', 16)
+grid on
 hold off
-ImageFilename = [file_output(1:end-4) '.jpg'];
-print(f,'-djpeg','-r300',ImageFilename)
 
-if couchshifted
-    f = figure;
-    hold on
-    plot(dataKIM.time.raw, dataKIM.coord.center(:,1), 'bx', dataKIM.time.raw, dataKIM.coord.center(:,2), 'gx', dataKIM.time.raw, dataKIM.coord.center(:,3), 'rx')
-    ylabel('Position (mm)', 'fontsize',16);
-    xlabel('Time (s)', 'fontsize',16);
-    title('KIM 3DoF motion (no couch shifts applied)', 'fontsize', 16);
-    legend('LR (KIM)', 'SI (KIM)', 'AP (KIM)', 'Location', 'best');
-    set(gca,'fontsize',16)
-    hold off
-    ImageFilename = [file_output(1:end-4) '_unshifted.jpg'];
-    print(f,'-djpeg','-r300',ImageFilename)
+% Get user input for analysis region
+disp('Please click to select start point...')
+[x1, ~] = ginput(1);
+xline(x1, '--k', 'Start');
+disp('Please click to select end point...')
+[x2, ~] = ginput(1);
+xline(x2, '--k', 'End');
+
+% Find nearest time indices
+[~, start_idx] = min(abs(dataKIM.time.raw - x1));
+[~, end_idx] = min(abs(dataKIM.time.raw - x2));
+
+% Ensure correct order
+if start_idx > end_idx
+    temp = start_idx;
+    start_idx = end_idx;
+    end_idx = temp;
 end
 
-DisplacementMean = mean(dataKIM.coord.shifted - dataMotion.raw,1);
-DisplacementStd = std(dataKIM.coord.shifted - dataMotion.raw,1);
-DisplacementPct = tsprctile(dataKIM.coord.shifted - dataMotion.raw,[5 95],1);
+% Calculate statistics for selected region
+selected_data = dataKIM.coord.shifted(start_idx:end_idx, :) - dataMotion.raw;
+DisplacementMean = mean(selected_data, 1);
+DisplacementStd = std(selected_data, 1);
+DisplacementPct = prctile(selected_data, [5 95], 1);
 
+% Display results in a new figure
+figure('Name', 'Selected Region Analysis')
+subplot(2,1,1)
+hold on
+plot(dataKIM.time.raw(start_idx:end_idx), dataKIM.coord.shifted(start_idx:end_idx,1), 'b-', 'DisplayName', 'LR')
+plot(dataKIM.time.raw(start_idx:end_idx), dataKIM.coord.shifted(start_idx:end_idx,2), 'g-', 'DisplayName', 'SI')
+plot(dataKIM.time.raw(start_idx:end_idx), dataKIM.coord.shifted(start_idx:end_idx,3), 'r-', 'DisplayName', 'AP')
+title('Selected Region', 'fontsize', 14)
+ylabel('Position (mm)', 'fontsize', 12)
+xlabel('Time (s)', 'fontsize', 12)
+legend('Location', 'best')
+grid on
+hold off
+
+% Plot differences
+subplot(2,1,2)
+hold on
+plot(dataKIM.time.raw(start_idx:end_idx), selected_data(:,1), 'b-', 'DisplayName', 'LR diff')
+plot(dataKIM.time.raw(start_idx:end_idx), selected_data(:,2), 'g-', 'DisplayName', 'SI diff')
+plot(dataKIM.time.raw(start_idx:end_idx), selected_data(:,3), 'r-', 'DisplayName', 'AP diff')
+title('Differences from Expected Position', 'fontsize', 14)
+ylabel('Difference (mm)', 'fontsize', 12)
+xlabel('Time (s)', 'fontsize', 12)
+legend('Location', 'best')
+grid on
+hold off
+
+% Display results in command window
+fprintf('\nAnalysis Results for Selected Region (%.2f s to %.2f s):\n', ...
+    dataKIM.time.raw(start_idx), dataKIM.time.raw(end_idx));
+fprintf('Direction\tMean (mm)\tStd (mm)\t5th Percentile\t95th Percentile\n');
+fprintf('LR\t\t%.2f\t\t%.2f\t\t%.2f\t\t%.2f\n', ...
+    DisplacementMean(1), DisplacementStd(1), DisplacementPct(1,1), DisplacementPct(2,1));
+fprintf('SI\t\t%.2f\t\t%.2f\t\t%.2f\t\t%.2f\n', ...
+    DisplacementMean(2), DisplacementStd(2), DisplacementPct(1,2), DisplacementPct(2,2));
+fprintf('AP\t\t%.2f\t\t%.2f\t\t%.2f\t\t%.2f\n', ...
+    DisplacementMean(3), DisplacementStd(3), DisplacementPct(1,3), DisplacementPct(2,3));
+
+% Save full trace figure
+ImageFilename = [file_output(1:end-4) '.jpg'];
+print(f, '-djpeg', '-r300', ImageFilename);
+
+% Check if couch shifts were applied and create additional plot if needed
+if couchshifted
+    f_unshifted = figure('Name', 'Unshifted Data');
+    hold on
+    plot(dataKIM.time.raw, dataKIM.coord.center(:,1), 'bx', 'DisplayName', 'LR (KIM)')
+    plot(dataKIM.time.raw, dataKIM.coord.center(:,2), 'gx', 'DisplayName', 'SI (KIM)')
+    plot(dataKIM.time.raw, dataKIM.coord.center(:,3), 'rx', 'DisplayName', 'AP (KIM)')
+    ylabel('Position (mm)', 'fontsize', 16);
+    xlabel('Time (s)', 'fontsize', 16);
+    title('KIM 3DoF motion (no couch shifts applied)', 'fontsize', 16);
+    legend('Location', 'best');
+    set(gca, 'fontsize', 16)
+    grid on
+    hold off
+    ImageFilename = [file_output(1:end-4) '_unshifted.jpg'];
+    print(f_unshifted, '-djpeg', '-r300', ImageFilename)
+end
+
+% Generate output text file
 failname = {' LR,', ' SI,', ' AP,'};
 if any(abs(DisplacementMean)>1)
     OutputText{1,1} = 'QA result: KIM FAILED in Static test';
@@ -523,22 +593,22 @@ if any(abs(DisplacementMean)>1)
     OutputText{2,1} = [OutputText{2,1} failname{DisplacementMean>1} ' > or = 2 mm' newline];
 elseif any(DisplacementStd>2)
     OutputText{1,1} = 'QA result: KIM FAILED in Static test';
-    OutputText{2,1} = 'Tested staic move: standard deviation of difference of'; 
+    OutputText{2,1} = 'Tested static move: standard deviation of difference of'; 
     OutputText{2,1} = [OutputText{2,1} failname{DisplacementStd>2} ' > or = 2 mm' newline];
 else
     OutputText{1,1} = 'QA result: KIM PASSED in Static test';
     OutputText{2,1} = ['Tested static movement' newline]; 
 end
 
-OutputText{3,1} = sprintf('Mean\t\t\tStd\t\t\tPercentile(5,95)');
-OutputText{4,1} = sprintf('LR\tSI\tAP\tLR\tSI\tAP\tLR\tSI\tAP');
-OutputText{5,1} = sprintf('%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t(%1.2f, %1.2f)\t(%1.2f, %1.2f)\t(%1.2f, %1.2f)', ...
+OutputText{3,1} = sprintf('Analysis period: %.2f s to %.2f s', dataKIM.time.raw(start_idx), dataKIM.time.raw(end_idx));
+OutputText{4,1} = sprintf('Mean\t\t\tStd\t\t\tPercentile(5,95)');
+OutputText{5,1} = sprintf('LR\tSI\tAP\tLR\tSI\tAP\tLR\tSI\tAP');
+OutputText{6,1} = sprintf('%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t%1.2f\t(%1.2f, %1.2f)\t(%1.2f, %1.2f)\t(%1.2f, %1.2f)', ...
                     DisplacementMean, DisplacementStd, DisplacementPct);
-OutputText{6,1} = newline;
+OutputText{7,1} = newline;
 
-writecell(OutputText,file_output, 'Delimiter','space', 'QuoteStrings', false)
+writecell(OutputText, file_output, 'Delimiter', 'space', 'QuoteStrings', false)
 end
-
 function output = KIMCoordinate(inputfile)
 
     coordData = readcell(inputfile);
