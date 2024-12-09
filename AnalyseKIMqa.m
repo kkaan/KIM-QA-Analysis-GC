@@ -185,6 +185,9 @@ else
     logfilename = fullfile(KIMdata.KIMTrajFolder, listOfTrajFiles);
     opts = detectImportOptions(logfilename);
     rawDataKIM = readcell(logfilename, opts);
+    
+    % Define ShiftIndex_KIM for single trajectory file
+    ShiftIndex_KIM = size(rawDataKIM,1);
 end
 
 dataKIM.time.raw = [rawDataKIM{:,2}]';
@@ -539,10 +542,6 @@ end
 function output = KIMCoordinate(inputfile)
 
     coordData = readcell(inputfile);
-    if isnumeric(coordData{1,1})
-        output = cell2mat(coordData);
-    else
-        extract = split(coordData(3:end,2:end),'=');
-        output = cellfun(@str2num,extract(:,:,2));
-    end
+    extract = split(coordData(3:end,2:end),'=');
+    output = cellfun(@str2num,extract(:,:,2));
 end
