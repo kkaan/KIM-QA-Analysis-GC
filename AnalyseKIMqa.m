@@ -489,9 +489,9 @@ function AnalyseStatic(dataKIM, dataMotion, file_output, couchshifted)
 % Create the main figure for data selection
 f = figure('Name', 'Select Analysis Region');
 hold on
-plot(dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,1), 'b-', 'DisplayName', 'LR (KIM)')
-plot(dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,2), 'g-', 'DisplayName', 'SI (KIM)')
-plot(dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,3), 'r-', 'DisplayName', 'AP (KIM)')
+scatter(dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,1), 20, 'b', 'filled', 'DisplayName', 'LR (KIM)')
+scatter(dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,2), 20, 'g', 'filled', 'DisplayName', 'SI (KIM)')
+scatter(dataKIM.time.raw(10:end), dataKIM.coord.shifted(:,3), 20, 'r', 'filled', 'DisplayName', 'AP (KIM)')
 ylabel('Position (mm)', 'fontsize', 16);
 xlabel('Time (s)', 'fontsize', 16);
 title('KIM 3DoF motion - Click to select start and end points', 'fontsize', 16);
@@ -529,9 +529,9 @@ DisplacementPct = prctile(selected_data, [5 95], 1);
 figure('Name', 'Selected Region Analysis')
 subplot(2,1,1)
 hold on
-plot(dataKIM.time.raw(start_idx:end_idx), dataKIM.coord.shifted(start_idx:end_idx,1), 'b-', 'DisplayName', 'LR')
-plot(dataKIM.time.raw(start_idx:end_idx), dataKIM.coord.shifted(start_idx:end_idx,2), 'g-', 'DisplayName', 'SI')
-plot(dataKIM.time.raw(start_idx:end_idx), dataKIM.coord.shifted(start_idx:end_idx,3), 'r-', 'DisplayName', 'AP')
+scatter(dataKIM.time.raw(start_idx:end_idx), dataKIM.coord.shifted(start_idx:end_idx,1), 20, 'b', 'filled', 'DisplayName', 'LR')
+scatter(dataKIM.time.raw(start_idx:end_idx), dataKIM.coord.shifted(start_idx:end_idx,2), 20, 'g', 'filled', 'DisplayName', 'SI')
+scatter(dataKIM.time.raw(start_idx:end_idx), dataKIM.coord.shifted(start_idx:end_idx,3), 20, 'r', 'filled', 'DisplayName', 'AP')
 title('Selected Region', 'fontsize', 14)
 ylabel('Position (mm)', 'fontsize', 12)
 xlabel('Time (s)', 'fontsize', 12)
@@ -542,9 +542,9 @@ hold off
 % Plot differences
 subplot(2,1,2)
 hold on
-plot(dataKIM.time.raw(start_idx:end_idx), selected_data(:,1), 'b-', 'DisplayName', 'LR diff')
-plot(dataKIM.time.raw(start_idx:end_idx), selected_data(:,2), 'g-', 'DisplayName', 'SI diff')
-plot(dataKIM.time.raw(start_idx:end_idx), selected_data(:,3), 'r-', 'DisplayName', 'AP diff')
+scatter(dataKIM.time.raw(start_idx:end_idx), selected_data(:,1), 20, 'b', 'filled', 'DisplayName', 'LR diff')
+scatter(dataKIM.time.raw(start_idx:end_idx), selected_data(:,2), 20, 'g', 'filled', 'DisplayName', 'SI diff')
+scatter(dataKIM.time.raw(start_idx:end_idx), selected_data(:,3), 20, 'r', 'filled', 'DisplayName', 'AP diff')
 title('Differences from Expected Position', 'fontsize', 14)
 ylabel('Difference (mm)', 'fontsize', 12)
 xlabel('Time (s)', 'fontsize', 12)
@@ -571,9 +571,9 @@ print(f, '-djpeg', '-r300', ImageFilename);
 if couchshifted
     f_unshifted = figure('Name', 'Unshifted Data');
     hold on
-    plot(dataKIM.time.raw, dataKIM.coord.center(:,1), 'bx', 'DisplayName', 'LR (KIM)')
-    plot(dataKIM.time.raw, dataKIM.coord.center(:,2), 'gx', 'DisplayName', 'SI (KIM)')
-    plot(dataKIM.time.raw, dataKIM.coord.center(:,3), 'rx', 'DisplayName', 'AP (KIM)')
+    scatter(dataKIM.time.raw, dataKIM.coord.center(:,1), 20, 'b', 'filled', 'DisplayName', 'LR (KIM)')
+    scatter(dataKIM.time.raw, dataKIM.coord.center(:,2), 20, 'g', 'filled', 'DisplayName', 'SI (KIM)')
+    scatter(dataKIM.time.raw, dataKIM.coord.center(:,3), 20, 'r', 'filled', 'DisplayName', 'AP (KIM)')
     ylabel('Position (mm)', 'fontsize', 16);
     xlabel('Time (s)', 'fontsize', 16);
     title('KIM 3DoF motion (no couch shifts applied)', 'fontsize', 16);
@@ -609,6 +609,7 @@ OutputText{7,1} = newline;
 
 writecell(OutputText, file_output, 'Delimiter', 'space', 'QuoteStrings', false)
 end
+
 function output = KIMCoordinate(inputfile)
 
     coordData = readcell(inputfile);
