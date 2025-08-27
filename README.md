@@ -63,5 +63,13 @@ Within the folder *Test Files*, there are folders that contain relevent test dat
    3. Select the matched motion trace e.g. *LiverTraj_LargeSIandAPWithBreathHold_robot.txt*  
    4. Select the *co-ords.txt* file located in the Vendor folder e.g. *\KIM-QA-Analysis\Test Files\Varian\co-ords.txt*  
    5. Select the correct vendor radio button e.g. **Varian**  
-   6. Change the output folder if desired  
-   7. Click 'Analyse' and inspect the results  
+   6. Change the output folder if desired
+   7. Click 'Analyse' and inspect the results
+
+## Python GUI
+An experimental Python-based GUI (`kimqa_gui.py`) replicates the MATLAB app.
+It requires PyQt5 and pandas. Launch it with:
+
+```bash
+python kimqa_gui.py
+```
