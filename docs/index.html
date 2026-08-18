@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KIM QA Analysis. Validate KIM tracking against a 6DoF robot phantom</title>
+<meta name="description" content="A desktop tool for KIM motion-management QA. Overlays KIM's reported marker positions on a programmed 6DoF robot / HexaMotion trace and reports the per-axis tracking error that decides pass or fail. Windows executable, runs in the browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,600;0,700;1,600;1,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* KIM QA Analysis landing page. Design system shared with the app UI and the
+   phantom-results deck: paper surfaces, orange/cyan accents, Tw Cen MT
+   display (Barlow fallback), JetBrains Mono for data and filenames. */
+  :root {
+    --orange:      #FF9200;
+    --orange-soft: #FFB04A;
+    --orange-tint: #FFF1DC;
+    --pink:        #E71D73;
+    --cyan:        #36A7E1;
+    --green:       #96C13E;
+    --gray:        #797979;
+    --ink:         #0a0a0a;
+    --ink-2:       #2a2a2a;
+    --muted:       #6b6b6b;
+    --line:        #e3e3e3;
+    --line-soft:   #f0f0f0;
+    --paper:       #ffffff;
+    --paper-warm:  #faf7f1;
+    --font-display: "Tw Cen MT", "Twentieth Century", "Barlow", "Futura", "Trebuchet MS", sans-serif;
+    --font-body:    "Tw Cen MT", "Twentieth Century", "Barlow", "Futura", "Trebuchet MS", sans-serif;
+    --font-mono:    "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+    --pad-x: clamp(20px, 6vw, 96px);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 18px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  img { max-width: 100%; display: block; }
+
+  /* ---------- shared vocabulary ---------- */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .eyebrow b { color: var(--orange); font-weight: 500; }
+  section { padding: clamp(56px, 9vw, 120px) var(--pad-x); }
+  section.warm { background: var(--paper-warm); }
+  .sec-head { max-width: 900px; margin-bottom: clamp(28px, 4vw, 56px); }
+  .sec-head h2 {
+    font-family: var(--font-display);
+    font-size: clamp(30px, 4.4vw, 54px);
+    line-height: 1.08;
+    font-weight: 700;
+    margin-top: 12px;
+  }
+  .sec-head h2 em { font-style: normal; color: inherit; }
+  .sec-head h2 em.cy { color: inherit; }
+  .lede { max-width: 720px; color: var(--ink-2); }
+  .lede + .lede { margin-top: 12px; }
+  code {
+    font-family: var(--font-mono); font-size: 0.86em;
+    background: var(--orange-tint); padding: 2px 7px; border-radius: 2px;
+    word-break: break-word;
+  }
+
+  .card {
+    background: var(--paper-warm);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--orange);
+    padding: 22px 24px;
+  }
+  section.warm .card { background: var(--paper); }
+  .card.cy { border-left-color: var(--cyan); }
+  .card.gn { border-left-color: var(--green); }
+  .card.pk { border-left-color: var(--pink); }
+  .card h3 { font-family: var(--font-display); font-size: 22px; margin-bottom: 8px; }
+  .card p { color: var(--ink-2); font-size: 16.5px; }
+  .card p + p { margin-top: 10px; }
+  .card .tag {
+    display: inline-block; margin-top: 14px;
+    font-family: var(--font-mono); font-size: 12px; color: var(--muted);
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .card .crit {
+    display: block; margin-top: 14px; padding-top: 12px;
+    border-top: 1px dashed var(--line);
+    font-family: var(--font-mono); font-size: 13px; color: var(--ink-2);
+  }
+  .card .crit span { color: var(--green); }
+
+  .btn {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 14.5px;
+    padding: 12px 22px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: #fff;
+    text-decoration: none;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .btn:hover { background: var(--orange); border-color: var(--orange); color: #fff; }
+  .btn.ghost { background: transparent; color: var(--ink); }
+  .btn.ghost:hover { background: var(--ink); color: #fff; }
+  .btn.primary { background: var(--orange); border-color: var(--orange); color: var(--ink); font-weight: 500; }
+  .btn.primary:hover { background: var(--ink); border-color: var(--ink); color: #fff; }
+  :focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; gap: 26px;
+    padding: 14px var(--pad-x);
+    background: rgba(255,255,255,0.94);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .brand {
+    font-family: var(--font-display); font-weight: 700; font-size: 19px;
+    text-decoration: none; margin-right: auto; display: flex; align-items: center; gap: 12px;
+  }
+  nav .brand .dot { width: 11px; height: 11px; background: var(--orange); border-radius: 50%; }
+  nav a.link {
+    font-family: var(--font-mono); font-size: 13.5px;
+    color: var(--muted); text-decoration: none;
+  }
+  nav a.link:hover { color: var(--ink); }
+  nav a.link.dl { color: var(--orange); }
+  @media (max-width: 900px) { nav a.link { display: none; } nav a.link.dl { display: inline; } }
+
+  /* ---------- hero ---------- */
+  header.hero { padding: clamp(48px, 7vw, 90px) var(--pad-x) clamp(56px, 9vw, 120px); }
+  .hero .eyebrow { margin-bottom: 18px; }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(38px, 6.4vw, 84px);
+    line-height: 1.04;
+    font-weight: 700;
+    max-width: 1000px;
+  }
+  .hero h1 em { font-style: normal; color: inherit; }
+  .hero h1 em.cy { font-style: normal; color: inherit; }
+  .hero .lede { font-size: clamp(18px, 1.6vw, 21px); max-width: 780px; margin-top: 22px; }
+  .hero .cta { display: flex; gap: 14px; flex-wrap: wrap; margin: 30px 0 0; }
+
+  /* Signature: the overlay strip. Robot input (cyan trace) vs KIM detections
+     (orange dots), the read the whole tool is built around. */
+  .overlay-strip {
+    margin-top: clamp(36px, 5vw, 64px);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--orange);
+    background: var(--paper);
+    position: relative;
+  }
+  .overlay-strip svg { display: block; width: 100%; height: clamp(120px, 16vw, 190px); }
+  .overlay-strip .legend {
+    position: absolute; top: 10px; right: 14px;
+    display: flex; gap: 18px;
+    font-family: var(--font-mono); font-size: 12px; color: var(--muted);
+  }
+  .legend i { display: inline-block; width: 18px; height: 3px; background: var(--cyan); vertical-align: middle; margin-right: 6px; }
+  .legend b { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--orange); vertical-align: middle; margin-right: 6px; }
+  .trace-hex {
+    fill: none; stroke: var(--cyan); stroke-width: 2;
+    stroke-dasharray: 2400; stroke-dashoffset: 2400;
+    animation: draw 2.4s ease-out forwards;
+  }
+  .trace-dot { fill: var(--orange); opacity: 0; animation: pop .3s ease-out forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes pop { to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .trace-hex { animation: none; stroke-dashoffset: 0; }
+    .trace-dot { animation: none; opacity: 1; }
+  }
+  .strip-caption {
+    font-family: var(--font-mono); font-size: 12.5px; color: var(--muted);
+    margin-top: 10px;
+  }
+
+  /* ---------- steps ---------- */
+  .step .num {
+    font-family: var(--font-mono); font-size: 12.5px;
+    color: var(--orange); letter-spacing: 0.1em; margin-bottom: 10px;
+  }
+
+  /* ---------- app showcase ---------- */
+  .shot { border: 1px solid var(--line); box-shadow: 0 14px 40px rgba(10,10,10,0.10); }
+  .shot-caption {
+    font-family: var(--font-mono); font-size: 12.5px; color: var(--muted);
+    margin-top: 10px;
+  }
+
+  /* ---------- inputs reference ---------- */
+  pre.tree {
+    font-family: var(--font-mono); font-size: 13.5px; line-height: 1.65;
+    color: var(--ink-2); background: var(--paper-warm);
+    border: 1px solid var(--line); border-left: 4px solid var(--cyan);
+    padding: 18px 22px; margin-bottom: 28px; overflow-x: auto;
+  }
+  pre.tree b { color: var(--ink); }
+  pre.tree i { font-style: normal; color: var(--muted); }
+  .io-table { border: 1px solid var(--line); }
+  .io-row {
+    display: grid; grid-template-columns: minmax(200px, 260px) 1fr;
+    border-bottom: 1px solid var(--line);
+  }
+  .io-row:last-child { border-bottom: none; }
+  .io-row > div { padding: 16px 20px; }
+  .io-row .name { background: var(--paper-warm); border-right: 1px solid var(--line); }
+  .io-row .name code { background: none; padding: 0; color: var(--ink); font-size: 13.5px; }
+  .io-row .name .opt { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
+  .io-row .desc { color: var(--ink-2); font-size: 16px; }
+  @media (max-width: 720px) {
+    .io-row { grid-template-columns: 1fr; }
+    .io-row .name { border-right: none; border-bottom: 1px solid var(--line); }
+  }
+
+  .reg {
+    margin-top: 34px; padding-top: 20px; border-top: 1px solid var(--line);
+    font-family: var(--font-mono); font-size: 13.5px; color: var(--muted);
+    line-height: 1.7;
+  }
+  .reg b { color: var(--ink-2); font-weight: 500; }
+
+  /* ---------- footer ---------- */
+  footer {
+    background: var(--ink);
+    color: #cfcfcf;
+    padding: clamp(48px, 7vw, 80px) var(--pad-x) 40px;
+    font-size: 15.5px;
+  }
+  footer .cols {
+    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 32px;
+    max-width: 1200px;
+  }
+  @media (max-width: 860px) { footer .cols { grid-template-columns: 1fr; } }
+  footer h4 {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.09em; color: var(--orange-soft);
+    margin-bottom: 12px;
+  }
+  footer a { color: #cfcfcf; text-decoration: none; display: block; margin-bottom: 8px; }
+  footer a:hover { color: #fff; }
+  footer .fine {
+    margin-top: 44px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.14);
+    font-family: var(--font-mono); font-size: 12.5px; color: #9a9a9a;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="#top"><span class="dot"></span>KIM QA Analysis</a>
+  <a class="link" href="#method">Method</a>
+  <a class="link" href="#app">The app</a>
+  <a class="link" href="#inputs">Inputs</a>
+  <a class="link" href="kv-simulator.html">Simulator</a>
+  <a class="link dl" href="#download">Download</a>
+</nav>
+
+<header class="hero" id="top">
+  <div class="eyebrow">KIM trajectory logs <b>&middot;</b> HexaMotion/robot input traces and other trajectory logs</div>
+  <h1>KIM QA <em>Trajectory Analyser</em></h1>
+  <p class="lede">
+    A desktop tool for checking KIM real-time tracking against a known trajectory. Point it at a
+    results folder; it overlays KIM's reported marker positions on the programmed HexaMotion
+    robot trace, aligns the two time series, and reports the per-axis deviation that decides
+    whether a session passes.
+  </p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/kkaan/kim-qa/releases/latest/download/KIM-QA-Analysis-Windows.zip">Download the app</a>
+    <a class="btn ghost" href="#method">How it works</a>
+    <a class="btn ghost" href="https://github.com/kkaan/kim-qa">Source</a>
+  </div>
+
+  <div class="overlay-strip" aria-hidden="true">
+    <div class="legend"><span><i></i>Robot (input)</span><span><b></b>KIM</span></div>
+    <svg viewBox="0 0 1200 170" preserveAspectRatio="none">
+      <line x1="0" y1="85" x2="1200" y2="85" stroke="#e3e3e3" stroke-width="1"/>
+      <path class="trace-hex" d="M0,85 C20,45 40,45 60,85 S100,125 120,85 S160,45 180,85 S220,125 240,85 S280,45 300,85 S340,125 360,85 S400,42 420,82 S460,122 480,82 S520,42 540,82 S580,122 600,82 S640,40 660,80 S700,120 720,80 S760,40 780,80 S820,120 840,80 S880,38 900,78 S940,118 960,78 S1000,38 1020,78 S1060,118 1080,78 S1120,38 1140,78 S1180,118 1200,78"/>
+      <g>
+        <circle class="trace-dot" cx="30"   cy="57"  r="4" style="animation-delay:.10s"/>
+        <circle class="trace-dot" cx="90"   cy="113" r="4" style="animation-delay:.20s"/>
+        <circle class="trace-dot" cx="150"  cy="59"  r="4" style="animation-delay:.30s"/>
+        <circle class="trace-dot" cx="210"  cy="111" r="4" style="animation-delay:.40s"/>
+        <circle class="trace-dot" cx="270"  cy="58"  r="4" style="animation-delay:.50s"/>
+        <circle class="trace-dot" cx="330"  cy="112" r="4" style="animation-delay:.60s"/>
+        <circle class="trace-dot" cx="390"  cy="55"  r="4" style="animation-delay:.70s"/>
+        <circle class="trace-dot" cx="450"  cy="109" r="4" style="animation-delay:.80s"/>
+        <circle class="trace-dot" cx="510"  cy="55"  r="4" style="animation-delay:.90s"/>
+        <circle class="trace-dot" cx="570"  cy="109" r="4" style="animation-delay:1.00s"/>
+        <circle class="trace-dot" cx="630"  cy="53"  r="4" style="animation-delay:1.10s"/>
+        <circle class="trace-dot" cx="690"  cy="107" r="4" style="animation-delay:1.20s"/>
+        <circle class="trace-dot" cx="750"  cy="53"  r="4" style="animation-delay:1.30s"/>
+        <circle class="trace-dot" cx="810"  cy="107" r="4" style="animation-delay:1.40s"/>
+        <circle class="trace-dot" cx="870"  cy="51"  r="4" style="animation-delay:1.50s"/>
+        <circle class="trace-dot" cx="930"  cy="105" r="4" style="animation-delay:1.60s"/>
+        <circle class="trace-dot" cx="990"  cy="51"  r="4" style="animation-delay:1.70s"/>
+        <circle class="trace-dot" cx="1050" cy="105" r="4" style="animation-delay:1.80s"/>
+        <circle class="trace-dot" cx="1110" cy="49"  r="4" style="animation-delay:1.90s"/>
+        <circle class="trace-dot" cx="1170" cy="103" r="4" style="animation-delay:2.00s"/>
+      </g>
+    </svg>
+  </div>
+  <p class="strip-caption">
+    One axis of an overlay: the cyan line is the trajectory the robot was told to play; the
+    orange dots are where KIM said the marker was. The gap between them is the tracking error.
+  </p>
+</header>
+
+<section class="warm" id="method">
+  <div class="sec-head">
+    <div class="eyebrow">Method</div>
+    <h2>Static, dynamic and <em>interrupt</em> tests</h2>
+  </div>
+  <p class="lede" style="margin-bottom: 36px;">
+    The robotic phantom plays a programmed motion trace while KIM tracks the implanted markers.
+    Because the input trajectory is known, KIM's reported positions can be compared against
+    ground truth directly. The app time-aligns the two series by minimising RMSE (with an
+    optional manual offset), then computes the residual deviation per axis. It handles three
+    kinds of session, and classifies each one automatically from the folder contents.
+  </p>
+  <div class="grid-3">
+    <div class="card step">
+      <div class="num">STATIC</div>
+      <h3>Localisation</h3>
+      <p>A stationary marker against the expected centroid position. Checks KIM's absolute
+      localisation with no motion in play, reporting the offset per axis.</p>
+      <span class="crit">Reports mean offset and spread per axis</span>
+    </div>
+    <div class="card step cy">
+      <div class="num" style="color: var(--cyan);">DYNAMIC</div>
+      <h3>Motion trace</h3>
+      <p>KIM tracking against a known ground truth &mdash; a HexaMotion or robot trace, or a
+      baseline KIM acquisition &mdash; RMSE-aligned in time on the most active axis. Reports the
+      per-axis deviation (mean, SD, 5th and 95th percentiles) and a pass/fail verdict.</p>
+      <span class="crit">Pass: <span>|mean| &le; 1 mm</span> and <span>SD &le; 2 mm</span></span>
+    </div>
+    <div class="card step gn">
+      <div class="num" style="color: var(--green);">INTERRUPT</div>
+      <h3>Gated delivery</h3>
+      <p>A multi-segment acquisition stitched with the couch corrections applied between
+      segments. Dead time compresses visually, and a ghost overlay shows the uncorrected,
+      no-intervention trace for comparison.</p>
+      <span class="crit">Vendor-signed couch shifts, per axis</span>
+    </div>
+  </div>
+</section>
+
+<section id="app">
+  <div class="sec-head">
+    <div class="eyebrow">The app</div>
+    <h2>One <em>overlay view</em> for the whole folder</h2>
+  </div>
+  <p class="lede" style="margin-bottom: 36px;">
+    The app is a Windows executable that serves a local browser UI. There is no install and no
+    Python to set up. Point it at a results root and every session under it appears in the
+    sidebar, classified and ready to review.
+  </p>
+
+  <div class="grid-2" style="align-items: start;">
+    <div>
+      <a href="https://github.com/kkaan/kim-qa/releases/latest/download/KIM-QA-Analysis-Windows.zip"
+         title="Download KIM-QA-Analysis-Windows.zip">
+        <img class="shot" src="webapp-overlay.png"
+             alt="KIM QA Analysis app: three stacked LR/SI/AP panels overlaying KIM detections on the HexaMotion input trace, with dead-time compression and couch-shift annotations">
+      </a>
+      <div class="shot-caption">
+        An interrupted acquisition: KIM detections on the HexaMotion trace, dead time
+        compressed, couch correction annotated per axis.
+      </div>
+    </div>
+    <div style="display: grid; gap: 20px;">
+      <div class="card">
+        <h3>Overlay and metrics</h3>
+        <p>Three stacked LR/SI/AP panels, KIM detections over the input trace. Auto-fit the
+        time offset by RMSE or nudge it by hand, drag on a panel to select an analysis window,
+        and read live per-axis metrics (mean, SD, 5th and 95th percentiles, plus 3D) as you
+        adjust. Switch to residual mode to see the error directly.</p>
+      </div>
+      <div class="card">
+        <h3>Baseline comparisons</h3>
+        <p>Pick any ground truth from the dropdown: a HexaMotion trace, a robot file, or a
+        <b>baseline KIM acquisition</b> from a <code>Baselines</code> folder &mdash; ideal for
+        comparing a new tracking-software version against a known-good run. Same-fraction
+        replays can be aligned exactly with one click via the shared gantry angle
+        (<i>gantry remap</i>), and when a session holds several logs, a <i>test trace</i>
+        picker chooses which one is under review.</p>
+      </div>
+      <div class="card cy">
+        <h3>kV frame preview</h3>
+        <p>Where a <code>KIM-KV</code> folder is present, hovering a detection shows the actual
+        kV crop behind it, with a crosshair and the detected-marker ring, so you can check what
+        KIM was looking at when a point drifts.</p>
+      </div>
+      <div class="card gn">
+        <h3>QA record on save</h3>
+        <p>Save writes <code>overlay.png</code> into the session folder, persists your tuned
+        offsets and analysis ranges to <code>_overlay_state.json</code>, and regenerates a
+        combined <code>summary.md</code> at the root with per-axis and 3D statistics for every
+        reviewed session.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="warm" id="download">
+  <div class="sec-head">
+    <div class="eyebrow">Download &amp; use</div>
+    <h2>Quickstart</h2>
+  </div>
+  <div class="grid-2" style="margin-bottom: 24px;">
+    <div class="card step">
+      <div class="num">STEP 01 &middot; DOWNLOAD</div>
+      <h3>Get the latest release</h3>
+      <p>Download <a href="https://github.com/kkaan/kim-qa/releases/latest/download/KIM-QA-Analysis-Windows.zip"><code>KIM-QA-Analysis-Windows.zip</code></a>
+      (<a href="https://github.com/kkaan/kim-qa/releases/latest">release notes</a>) and extract
+      it anywhere.</p>
+    </div>
+    <div class="card step">
+      <div class="num">STEP 02 &middot; LAUNCH</div>
+      <h3>Point it at your results</h3>
+      <p>Double-click <code>KIM-QA-Server.exe</code> and pick the results folder in the dialog,
+      or run <code>KIM-QA-Server.exe --root "D:\KIM\2026-06-23"</code> from a terminal. Add
+      <code>--vendor Varian</code> for Varian machines. Your browser opens the app
+      automatically.</p>
+    </div>
+    <div class="card step">
+      <div class="num">STEP 03 &middot; ANALYSE</div>
+      <h3>Review each session</h3>
+      <p>Sessions appear in the sidebar, classified as static, motion, or interrupt. Motion
+      traces auto-match by folder name; refine the alignment with the offset slider, drag to
+      select an analysis window, and hover points to see the kV frame behind each detection.</p>
+    </div>
+    <div class="card step">
+      <div class="num">STEP 04 &middot; SIGN OFF</div>
+      <h3>Save the QA record</h3>
+      <p>Save writes the overlay image and the tuned state into the session, and regenerates the
+      root-level <code>summary.md</code> with the per-axis and 3D tracking-error statistics for
+      every reviewed session.</p>
+    </div>
+  </div>
+  <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+    <a class="btn primary" href="https://github.com/kkaan/kim-qa/releases/latest/download/KIM-QA-Analysis-Windows.zip">Download latest release</a>
+    <a class="btn ghost" href="https://github.com/kkaan/kim-qa">Browse the source</a>
+  </div>
+</section>
+
+<section id="inputs">
+  <div class="sec-head">
+    <div class="eyebrow">Inputs</div>
+    <h2>What the app <em class="cy">reads</em></h2>
+  </div>
+  <p class="lede" style="margin-bottom: 36px;">
+    The app parses standard KIM session folders live; nothing needs pre-processing. Point it at
+    one results root containing a folder per session, with the ground-truth traces in a
+    <code>Motion traces</code> folder alongside them:
+  </p>
+  <pre class="tree">
+<b>D:\KIM\2026-06-23\</b>                          <i>&larr; the results root you pick at launch</i>
+&#9500;&#9472; <b>PHANTOM_ROBOT_Centroid.txt</b>               <i>&larr; shared centroid file (a session-local copy overrides it)</i>
+&#9500;&#9472; <b>Motion traces\</b>                           <i>&larr; ground-truth traces (any nesting inside)</i>
+&#9474;  &#9492;&#9472; hexamotion-prostate\t_Prostate_Continuous_Drift.txt
+&#9500;&#9472; <b>Baselines\</b>                               <i>&larr; baseline KIM acquisitions (ground truth for version QA)</i>
+&#9474;  &#9492;&#9472; 2026_06_17-pat03\MarkerLocationsGA_CouchShift_0.txt
+&#9500;&#9472; <b>Prostate-Continuous-interrupt, ...\</b>      <i>&larr; one folder per session; the name picks the trace</i>
+&#9474;  &#9500;&#9472; MarkerLocationsGA_CouchShift_0.txt   <i>primary log: positions + gantry (_1, _2, ... after interrupts)</i>
+&#9474;  &#9500;&#9472; MarkerLocations_CouchShift_0.txt     <i>fallback when the GA log is absent</i>
+&#9474;  &#9500;&#9472; couchShifts.txt                      <i>optional &mdash; interrupt sessions</i>
+&#9474;  &#9500;&#9472; KIM-KV\                              <i>optional &mdash; kV frames for hover preview</i>
+&#9474;  &#9492;&#9472; kim-log-pdf480\                      <i>optional &mdash; extra KIM log, overlaid as a toggle</i>
+&#9492;&#9472; lung-typical, ...\</pre>
+  <p class="lede" style="margin-bottom: 36px;">
+    Session folder names drive the automatic trace match: a name containing e.g.
+    <code>prostate</code>&nbsp;+&nbsp;<code>erratic</code> is matched (case-insensitively) to
+    <code>t_Prostate_Erratic.txt</code>, searched anywhere under <code>Motion traces</code>;
+    unmatched folders open as static until a ground truth is picked in the app &mdash; nothing
+    requires the naming convention. A different traces location can be given with
+    <code>--traces-root</code>, and a different baselines location with
+    <code>--baselines-root</code>.
+  </p>
+  <div class="io-table">
+    <div class="io-row">
+      <div class="name"><code>MarkerLocationsGA_CouchShift_*.txt</code></div>
+      <div class="desc">KIM trajectory files, batch-processed per session. Marker columns
+      (LR/SI/AP) and gantry angle are detected by header name.</div>
+    </div>
+    <div class="io-row">
+      <div class="name"><code>couchShifts.txt</code><span class="opt">Optional</span></div>
+      <div class="desc">Commanded couch movements (VRT, LNG, LAT). Used for the interrupt overlay
+      and its shift-removed counterfactual trace. The Elekta/Varian vertical-to-AP sign is handled by the
+      <code>--vendor</code> setting.</div>
+    </div>
+    <div class="io-row">
+      <div class="name"><code>KIM-KV/</code><span class="opt">Optional</span></div>
+      <div class="desc">kV projection frames. When present, each detection can be hovered to show
+      the source frame with a crosshair and detected-marker ring.</div>
+    </div>
+    <div class="io-row">
+      <div class="name"><code>Motion traces/</code><span class="opt">Motion sessions</span></div>
+      <div class="desc">The ground-truth traces. Every <code>*.txt</code> inside is selectable
+      from the app's ground-truth dropdown, with the format auto-detected: a 3-column HexaMotion
+      trajectory (implicit 20 ms step) or a robot file with explicit timestamps (whitespace or
+      comma-delimited).</div>
+    </div>
+    <div class="io-row">
+      <div class="name"><code>Baselines/&lt;name&gt;/</code><span class="opt">Optional</span></div>
+      <div class="desc">Baseline KIM acquisitions, selectable as ground truth for comparing a
+      new tracking-software version against a known-good run. Same-fraction replays can be
+      aligned via the shared gantry angle with the app's <i>gantry remap</i> toggle.</div>
+    </div>
+    <div class="io-row">
+      <div class="name">any subfolder with a KIM log<span class="opt">Optional</span></div>
+      <div class="desc">An extra run of the same session (offline reprocess, another software
+      version) overlaid as a legend toggle with its own time offset &mdash; recognised by
+      contents, not by folder name &mdash; or promoted to the primary trace with the
+      <i>test trace</i> picker.</div>
+    </div>
+    <div class="io-row">
+      <div class="name"><code>*centroid*.txt</code><span class="opt">Optional</span></div>
+      <div class="desc">1&ndash;3 seed/marker lines plus the isocentre, in cm. The seed-centroid
+      offset from isocentre is subtracted from every KIM trajectory before analysis. Place one
+      per session, or a shared one at the results root; for a marker sitting at isocentre use an
+      all-zero file. Absent = expected offset zero (fine for baseline comparisons, where the
+      shared centroid cancels). Multi-marker KIM logs are averaged into the same centroid.
+      Labelled <code>Seed 1</code>&hellip; and <code>Marker_&lt;label&gt;</code> layouts are both
+      read, as is the label-free numeric variant used by the MATLAB QA codes; the isocentre line
+      may be titled <code>Isocenter</code>, <code>Isocentre</code> or <code>Centroid (cm)</code>
+      &mdash; KIM's own export uses the last of these. When one root holds several variants, the
+      app's <i>centroid</i> row overrides the automatic pick for every session: choose from the
+      results root, <b>Browse&hellip;</b> for a file dialog, or paste any path.</div>
+    </div>
+  </div>
+  <div class="reg">
+    Coordinate convention: centroid files use <b>(X, Y, Z) in cm</b>; the app works internally
+    in <b>LR/SI/AP millimetres</b>. Couch-shift sign handling differs by vendor, so set
+    <b>--vendor</b> to match the treatment machine (default Elekta).
+  </div>
+</section>
+
+<section class="warm" id="simulator">
+  <div class="sec-head">
+    <div class="eyebrow">Also here</div>
+    <h2>kV imaging <em class="cy">simulator</em></h2>
+  </div>
+  <p class="lede">
+    A browser-based visualisation of kV imaging geometry: depth-dependent magnification,
+    geometric penumbra, and how target motion appears on the detector at different gantry
+    angles. Adjustable SAD, SID, focal spot, gantry angle, and target translation. Useful for
+    teaching and for reasoning about what a detection on a projection actually represents.
+  </p>
+  <div style="margin-top: 26px;">
+    <a class="btn" href="kv-simulator.html">Open the simulator &rarr;</a>
+  </div>
+</section>
+
+<footer>
+  <div class="cols">
+    <div>
+      <h4>KIM QA Analysis</h4>
+      <p style="max-width: 400px;">
+        A tool for validating KIM real-time tracking against a 6DoF robotic phantom. Developed
+        for multi-centre KIM commissioning and ongoing QA, and released for colleagues doing the
+        same work.
+      </p>
+    </div>
+    <div>
+      <h4>Software</h4>
+      <a href="https://github.com/kkaan/kim-qa">GitHub repository</a>
+      <a href="https://github.com/kkaan/kim-qa/releases/latest">Releases</a>
+      <a href="kv-simulator.html">kV simulator</a>
+    </div>
+    <div>
+      <h4>KIM</h4>
+      <a href="https://image-x.sydney.edu.au/kim-2/">KIM at Image X</a>
+      <a href="https://image-x.sydney.edu.au/">Image X Institute</a>
+    </div>
+    <div>
+      <h4>Method references</h4>
+      <a href="https://pubmed.ncbi.nlm.nih.gov/28342648/">KIM 6DoF accuracy</a>
+      <a href="https://pubmed.ncbi.nlm.nih.gov/29471970/">First clinical KIM</a>
+      <a href="https://pubmed.ncbi.nlm.nih.gov/31446633/">SPARK trial KIM</a>
+    </div>
+  </div>
+  <div class="fine">
+    KIM QA Analysis. Open-source QA tooling for kilovoltage intrafraction monitoring.
+  </div>
+</footer>
+
+</body>
+</html>
